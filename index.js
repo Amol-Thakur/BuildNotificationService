@@ -1,10 +1,11 @@
 const { WebClient } = require('@slack/client');
+require('dotenv').config();
 const https = require('https');
 
 const axios = require('axios');
 
 // Replace with your bot's token
-const token = 'xoxb-4473380340213-4489040535905-OY3WHEDNv2sbnQDzWsEWGt8O';
+const token = process.env.SLACK_BOT_TOKEN;
 
 // Create a new instance of the WebClient class
 const web = new WebClient(token);
@@ -29,7 +30,7 @@ const pollApi = () => {
         },
         httpsAgent: new https.Agent({ rejectUnauthorized: false })
     }).then(response => {
-            // Process the response from the API
+           // Process the response from the API
             //Use the chat.postMessage method to post the results to Slack
             // web.chat.postMessage({ channel, text: response.data.recentRunItems})
             //   .then(() => {
