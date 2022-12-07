@@ -1,0 +1,15 @@
+{
+  "name": "slackbot",
+  "version": "1.0.0",
+  "description": "slack bot to publish checkin status",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "author": "amol thakur",
+  "license": "ISC",
+  "dependencies": {
+    "@slack/client": "^5.0.2",
+    "axios": "^1.2.1"
+  }
+}
