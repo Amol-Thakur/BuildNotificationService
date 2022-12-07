@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "@slack/client": "^5.0.2",
-    "axios": "^1.2.1"
+    "axios": "^1.2.1",
+    "https": "^1.0.0"
   }
 }

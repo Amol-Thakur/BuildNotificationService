@@ -1,4 +1,6 @@
 const { WebClient } = require('@slack/client');
+const https = require('https');
+
 const axios = require('axios');
 
 // Replace with your bot's token
@@ -22,19 +24,20 @@ const pollApi = () => {
         params: {
             'autobuild-id': 34722,
             'page-number':1,
-            'noOfRecords':50
+            'noOfRecords':5
 
-        }
+        },
+        httpsAgent: new https.Agent({ rejectUnauthorized: false })
     }).then(response => {
             // Process the response from the API
             //Use the chat.postMessage method to post the results to Slack
-            /*web.chat.postMessage({ channel, text: response.data.recentRunItems})
-              .then(() => {
-                console.log('Message posted successfully');
-              })
-              .catch(err => {
-                console.log('Error posting message:', err);
-              });*/
+            // web.chat.postMessage({ channel, text: response.data.recentRunItems})
+            //   .then(() => {
+            //     console.log('Message posted successfully');
+            //   })
+            //   .catch(err => {
+            //     console.log('Error posting message:', err);
+            //   });
               console.log(response.data.recentRunItems.length);
            
         })
