@@ -10,7 +10,7 @@ const token = process.env.SLACK_BOT_TOKEN;
 const web = new WebClient(token);
 
 // Set the channel that the bot will post messages to
-const channel = 'D04E2RBESNQ';
+const channel = 'D04EHGBCG8H';
 
 // Replace with the URL of the API you want to poll
 const url = 'https://lunadas.prod.ci.sfdc.net/api/run/v1/q/get-recent-run';
