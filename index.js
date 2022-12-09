@@ -44,22 +44,22 @@ const fetchMainPrecheckinCLs = () => {
     axios.get(url, {
         params: {
             'autobuild-id': main_precheckin,
-            'minChangeList':main_minChangeList
+            'minChangeList': main_minChangeList
         },
         httpsAgent: new https.Agent({ rejectUnauthorized: false })
     }).then(response => {
-            // Process the response from the API
-            console.log(response.data.recentRunItems.length);
-            let isSetMinChangeList = false;
-            response.data.recentRunItems.forEach((item) => {
-                if (!isSetMinChangeList) {
-                    isSetMinChangeList = true;
-                    main_minChangeList = item.changelist;
-                }
-                main_map.set(item.changelist, item.status);
-            });
-            console.log(main_map);
-        })
+        // Process the response from the API
+        console.log(response.data.recentRunItems.length);
+        let isSetMinChangeList = false;
+        response.data.recentRunItems.forEach((item) => {
+            if (!isSetMinChangeList) {
+                isSetMinChangeList = true;
+                main_minChangeList = item.changelist;
+            }
+            main_map.set(item.changelist, item.status);
+        });
+        console.log(main_map);
+    })
         .catch(err => {
             // Handle any errors that occurred when making the request
             console.log('Error polling API:', err);
@@ -71,26 +71,26 @@ const fetch242PatchPrecheckinCLs = () => {
     axios.get(url, {
         params: {
             'autobuild-id': patch242_precheckin,
-            'minChangeList':patch242_minChangeList
+            'minChangeList': patch242_minChangeList
         },
         httpsAgent: new https.Agent({ rejectUnauthorized: false })
     }).then(response => {
-            console.log(response.data.recentRunItems.length);
-            let isSetMinChangeList = false;
-            response.data.recentRunItems.forEach((item) => {
-                if (!isSetMinChangeList) {
-                    isSetMinChangeList = true;
-                    patch242_minChangeList = item.changelist;
-                }
-                patch242_map.set(item.changelist, item.status);
-            });
+        console.log(response.data.recentRunItems.length);
+        let isSetMinChangeList = false;
+        response.data.recentRunItems.forEach((item) => {
+            if (!isSetMinChangeList) {
+                isSetMinChangeList = true;
+                patch242_minChangeList = item.changelist;
+            }
+            patch242_map.set(item.changelist, item.status);
+        });
             console.log(patch242_map);
-        })
+    })
         .catch(err => {
             // Handle any errors that occurred when making the request
             console.log('Error polling API:', err);
         });
-        setTimeout(FetchNewChangeLists, 120000);
+    setTimeout(FetchNewChangeLists, 120000);
 };
 
 //Function to process the map/queue to query the status and send out the slack notification for finished builds
@@ -103,25 +103,25 @@ const processMainQueueBuildStatus = () => {
     // Status will be either RUNNING OR FINISHED
     // If a build is failed/successful, status will always be FINISHED
     // Hence we need to compare "buildFailed" value to check if a build is failed/successful
-    
+
     const CLs = Array.from(main_map.keys()).join(",");
 
     axios.get(url, {
         params: {
             'autobuild-id': main_precheckin,
-            'changelist-ids':CLs
+            'changelist-ids': CLs
         },
         httpsAgent: new https.Agent({ rejectUnauthorized: false })
     }).then(response => {
-            // Process the response from the API
-            response.data.recentRunItems.forEach((item) => {
-                if (main_map.get(item.changelist) !== undefined && item.status === 'FINISHED') {
-                    //Status changed, send out a slack notification here and Remove the entry from map
-                    sendSlackNotification(item.changelist, item.buildFailed, item.owner, item.origOwner);
-                    main_map.delete(item.changelist);
-                }
-            });
-        })
+        // Process the response from the API
+        response.data.recentRunItems.forEach((item) => {
+            if (main_map.get(item.changelist) !== undefined && item.status === 'FINISHED') {
+                //Status changed, send out a slack notification here and Remove the entry from map
+                sendSlackNotification(item.changelist, item.buildFailed, item.owner, item.origOwner, item.autoBuildId);
+                main_map.delete(item.changelist);
+            }
+        });
+    })
         .catch(err => {
             // Handle any errors that occurred when making the request
             console.log('Error Updating Status API:', err);
@@ -134,36 +134,84 @@ const process242PatchQueueBuildStatus = () => {
     axios.get(url, {
         params: {
             'autobuild-id': patch242_precheckin,
-            'changelist-ids':CLs
+            'changelist-ids': CLs
         },
         httpsAgent: new https.Agent({ rejectUnauthorized: false })
     }).then(response => {
-            // Process the response from the API
-            response.data.recentRunItems.forEach((item) => {
-                if (patch242_map.get(item.changelist) !== undefined && item.status === 'FINISHED') {
-                    //Status changed, send out a slack notification here and Remove the entry from map
-                    sendSlackNotification(item.changelist, item.buildFailed, item.owner, item.origOwner);
-                    patch242_map.delete(item.changelist);
-                }
-            });
-        })
+        // Process the response from the API
+        response.data.recentRunItems.forEach((item) => {
+            if (patch242_map.get(item.changelist) !== undefined && item.status === 'FINISHED') {
+                //Status changed, send out a slack notification here and Remove the entry from map
+                sendSlackNotification(item.changelist, item.buildFailed, item.owner, item.origOwner, item.autoBuildId);
+                patch242_map.delete(item.changelist);
+            }
+        });
+    })
         .catch(err => {
             // Handle any errors that occurred when making the request
             console.log('Error Updating Status API:', err);
         });
-        setTimeout(ProcessQueueForBuildStatus, 60000);
+    setTimeout(ProcessQueueForBuildStatus, 60000);
 }
 
-const sendSlackNotification = (changelist, status, owner, origOwner) => {
-    console.log("Send out a notification here " + changelist + " : " + status);
-    //Use the chat.postMessage method to post the results to Slack
-            // web.chat.postMessage({ channel, text: response.data.recentRunItems})
-            //   .then(() => {
-            //     console.log('Message posted successfully');
-            //   })
-            //   .catch(err => {
-            //     console.log('Error posting message:', err);
-            //   });
+const sendSlackNotification = (changelist, status, owner, origOwner, autoBuildId) => {
+    let username;
+    if (origOwner != null) {
+        username = origOwner;
+    } else {
+        username = owner;
+    }
+    let buildStatus;
+    if (status == 'y') {
+        buildStatus = 'succeeded';
+    } else {
+        buildStatus = 'failed';
+    }
+    const autobuildUrl = `https://luna.prod.ci.sfdc.net/build/Autobuild/recent_runs?autobuild_id=${autoBuildId}&users=${username}`;
+    const emailAddress = username + "@salesforce.com";
+    //const emailAddress = "amol.thakur@salesforce.com";
+    web.users.lookupByEmail({ email: emailAddress }).then(response => {
+        console.log(response.user.id);
+        const userId = response.user.id;
+        web.chat.postMessage({
+            channel: userId,
+            blocks: [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": `Checkin ${buildStatus}`
+                    }
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": `*Changelist:*\n${changelist}`
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": `*Owner:*\n${username}`
+                        }
+                    ]
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": `<${autobuildUrl}|View in Luna>`
+                    }
+                }
+            ]
+        })
+            .then(() => {
+                console.log('Message posted successfully');
+            })
+            .catch(err => {
+                console.log('Error posting message:', err);
+            });
+    })
 }
 
 // Fetch New Records every 2 minutes, initially start with 1 second delay
