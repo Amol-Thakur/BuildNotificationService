@@ -2,6 +2,7 @@ const { WebClient } = require('@slack/client');
 require('dotenv').config();
 const https = require('https');
 const axios = require('axios');
+const { debug } = require('console');
 
 // Replace with your bot's token
 const token = process.env.SLACK_BOT_TOKEN;
@@ -34,7 +35,7 @@ let patch242_minChangeList = undefined;
 
 // Fetch API for all autobuilds, to fetch new records and keep saving it in Map
 const FetchNewChangeLists = () => {
-    fetchMainPrecheckinCLs();
+    //fetchMainPrecheckinCLs();
     fetch242PatchPrecheckinCLs();
 }
 
@@ -44,12 +45,14 @@ const fetchMainPrecheckinCLs = () => {
     axios.get(url, {
         params: {
             'autobuild-id': main_precheckin,
-            'minChangeList': main_minChangeList
+            'minChangeList': main_minChangeList == undefined ? main_minChangeList : main_minChangeList + 1,
+            'owners': 'jagdish.kumar',
+            'noOfRecords': 1
         },
         httpsAgent: new https.Agent({ rejectUnauthorized: false })
     }).then(response => {
         // Process the response from the API
-        console.log(response.data.recentRunItems.length);
+        console.log("No Changelists scanned: ", response.data.recentRunItems.length);
         let isSetMinChangeList = false;
         response.data.recentRunItems.forEach((item) => {
             if (!isSetMinChangeList) {
@@ -64,6 +67,7 @@ const fetchMainPrecheckinCLs = () => {
             // Handle any errors that occurred when making the request
             console.log('Error polling API:', err);
         });
+    setTimeout(FetchNewChangeLists, 120000);
 };
 
 const fetch242PatchPrecheckinCLs = () => {
@@ -71,12 +75,14 @@ const fetch242PatchPrecheckinCLs = () => {
     axios.get(url, {
         params: {
             'autobuild-id': patch242_precheckin,
-            'minChangeList': patch242_minChangeList
+            'minChangeList': patch242_minChangeList == undefined ? patch242_minChangeList : patch242_minChangeList + 1,
+            'owners': 'aashishgoel',
+            'noOfRecords': 1
         },
         httpsAgent: new https.Agent({ rejectUnauthorized: false })
     }).then(response => {
-        console.log(response.data.recentRunItems.length);
-        let isSetMinChangeList = false;
+        console.log("No of Changelists scanned: ", response.data.recentRunItems.length);
+        let isSetMinChangeList = false
         response.data.recentRunItems.forEach((item) => {
             if (!isSetMinChangeList) {
                 isSetMinChangeList = true;
@@ -84,7 +90,14 @@ const fetch242PatchPrecheckinCLs = () => {
             }
             patch242_map.set(item.changelist, item.status);
         });
-            console.log(patch242_map);
+        console.log(patch242_map);
+
+        response.data.recentRunItems.forEach((item) => {
+            if (item.status == "RUNNING") {
+                sendSlackNotification(item.changelist, item.buildFailed, item.owner, item.origOwner, item.autobuildId);
+            }
+        });
+
     })
         .catch(err => {
             // Handle any errors that occurred when making the request
@@ -95,7 +108,7 @@ const fetch242PatchPrecheckinCLs = () => {
 
 //Function to process the map/queue to query the status and send out the slack notification for finished builds
 const ProcessQueueForBuildStatus = () => {
-    processMainQueueBuildStatus();
+    //processMainQueueBuildStatus();
     process242PatchQueueBuildStatus();
 }
 
@@ -105,7 +118,7 @@ const processMainQueueBuildStatus = () => {
     // Hence we need to compare "buildFailed" value to check if a build is failed/successful
 
     const CLs = Array.from(main_map.keys()).join(",");
-
+    console.log("ChangeLists to be processed in the queue:", CLs);
     axios.get(url, {
         params: {
             'autobuild-id': main_precheckin,
@@ -117,7 +130,7 @@ const processMainQueueBuildStatus = () => {
         response.data.recentRunItems.forEach((item) => {
             if (main_map.get(item.changelist) !== undefined && item.status === 'FINISHED') {
                 //Status changed, send out a slack notification here and Remove the entry from map
-                sendSlackNotification(item.changelist, item.buildFailed, item.owner, item.origOwner, item.autoBuildId);
+                sendSlackNotification(item.changelist, item.buildFailed, item.owner, item.origOwner, item.autobuildId);
                 main_map.delete(item.changelist);
             }
         });
@@ -126,11 +139,13 @@ const processMainQueueBuildStatus = () => {
             // Handle any errors that occurred when making the request
             console.log('Error Updating Status API:', err);
         });
+    console.log("========================================")
+    setTimeout(ProcessQueueForBuildStatus, 60000);
 }
 
 const process242PatchQueueBuildStatus = () => {
     const CLs = Array.from(patch242_map.keys()).join(",");
-
+    console.log("ChangeLists in the to be processed queue:", CLs);
     axios.get(url, {
         params: {
             'autobuild-id': patch242_precheckin,
@@ -142,7 +157,7 @@ const process242PatchQueueBuildStatus = () => {
         response.data.recentRunItems.forEach((item) => {
             if (patch242_map.get(item.changelist) !== undefined && item.status === 'FINISHED') {
                 //Status changed, send out a slack notification here and Remove the entry from map
-                sendSlackNotification(item.changelist, item.buildFailed, item.owner, item.origOwner, item.autoBuildId);
+                sendSlackNotification(item.changelist, item.buildFailed, item.owner, item.origOwner, item.autobuildId);
                 patch242_map.delete(item.changelist);
             }
         });
@@ -151,6 +166,7 @@ const process242PatchQueueBuildStatus = () => {
             // Handle any errors that occurred when making the request
             console.log('Error Updating Status API:', err);
         });
+    console.log("========================================")
     setTimeout(ProcessQueueForBuildStatus, 60000);
 }
 
@@ -163,13 +179,14 @@ const sendSlackNotification = (changelist, status, owner, origOwner, autoBuildId
     }
     let buildStatus;
     if (status == 'y') {
+        buildStatus = 'failed';
+    } else if (status == 'n') {
         buildStatus = 'succeeded';
     } else {
-        buildStatus = 'failed';
+        buildStatus = 'running';
     }
     const autobuildUrl = `https://luna.prod.ci.sfdc.net/build/Autobuild/recent_runs?autobuild_id=${autoBuildId}&users=${username}`;
     const emailAddress = username + "@salesforce.com";
-    //const emailAddress = "amol.thakur@salesforce.com";
     web.users.lookupByEmail({ email: emailAddress }).then(response => {
         console.log(response.user.id);
         const userId = response.user.id;
@@ -219,4 +236,3 @@ setTimeout(FetchNewChangeLists, 1000);
 
 // Process Queue to update build status every 1 minute, initially start with 5 second delay
 setTimeout(ProcessQueueForBuildStatus, 5000);
-
